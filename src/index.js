@@ -31,17 +31,24 @@ export function createStore(state = {}) {
     };
   }
 
-  return { subscribe, unsubscribe, setState, getState, bindAction };
+  return {
+    subscribe,
+    unsubscribe,
+    setState,
+    getState,
+    bindAction,
+  };
 }
 
 export function createIntegration({
+  Component,
   createContext,
-  useContext,
-  useMemo,
-  useEffect,
   createElement,
   memo,
-  Component,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
 }) {
   // Create context
   const CONTEXT = createContext();
@@ -52,11 +59,11 @@ export function createIntegration({
   }
 
   function useStore(filterState, actions) {
-    filterState = useMemo(() => {
-      return typeof filterState != 'function'
-        ? select(filterState)
-        : filterState;
-    }, [filterState]);
+    filterState = useMemo(
+      () =>
+        typeof filterState !== 'function' ? select(filterState) : filterState,
+      [filterState]
+    );
 
     const store = useContext(CONTEXT);
     const [filteredState, setState] = useState(() => store.getState());
@@ -74,9 +81,10 @@ export function createIntegration({
   }
 
   function connect(filterState, actions) {
-    if (typeof filter != 'function') {
+    if (typeof filter !== 'function') {
       filterState = select(filterState);
     }
+
     return function connectComponent(ChildComponent) {
       const MemoizedComponent = memo(ChildComponent);
       class ConnectedComponent extends Component {
@@ -137,10 +145,10 @@ export function connectDevtools(store) {
   const devtools = extension.connect();
   devtools.init(store.getState());
   devtools.subscribe(message => {
-    if (message.type === 'DISPATCH' && message.state) {
+    if (message.type == 'DISPATCH' && message.state) {
       ignoreState =
-        message.payload.type === 'JUMP_TO_ACTION' ||
-        message.payload.type === 'JUMP_TO_STATE';
+        message.payload.type == 'JUMP_TO_ACTION' ||
+        message.payload.type == 'JUMP_TO_STATE';
       store.setState(JSON.parse(message.state));
     }
   });
@@ -152,6 +160,7 @@ export function connectDevtools(store) {
       ignoreState = false;
     }
   }
+
   const filter = () => ({ __UNISTORE_DEVTOOLS__: true });
   store.subscribe(listener, filter);
 }

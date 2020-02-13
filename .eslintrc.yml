@@ -1,0 +1,5 @@
+extends:
+  - healthier
+  - plugin:prettier/recommended
+rules:
+  eqeqeq: off
