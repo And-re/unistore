@@ -5,7 +5,8 @@
   "source": "src/index.js",
   "scripts": {
     "lint": "eslint src test",
-    "test": "jest"
+    "test": "jest",
+    "version": "npx @pika/pack"
   },
   "keywords": [
     "preact",
