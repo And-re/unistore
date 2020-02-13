@@ -8,12 +8,8 @@
     "test": "jest",
     "version": "npx @pika/pack"
   },
-  "keywords": [
-    "preact",
-    "component",
-    "state machine",
-    "redux"
-  ],
+  "files": ["src/index.js", "src/util.js"],
+  "keywords": ["preact", "component", "state machine", "redux"],
   "repository": "abuffseagull/unistore",
   "author": "ABuffSeagull <reecevanatta@gmail.com>",
   "license": "MIT",
@@ -34,6 +30,7 @@
     "eslint-plugin-jest": "^23.7.0",
     "eslint-plugin-prettier": "^3.1.2",
     "jest": "^25.1.0",
+    "np": "^6.0.0",
     "preact": "^10.3.1",
     "prettier": "^1.19.1",
     "react": "^16.8.4",
@@ -43,13 +40,6 @@
     "@babel/preset-react": "^7.8.3"
   },
   "@pika/pack": {
-    "pipeline": [
-      [
-        "@pika/plugin-standard-pkg"
-      ],
-      [
-        "@pika/plugin-build-web"
-      ]
-    ]
+    "pipeline": [["@pika/plugin-standard-pkg"], ["@pika/plugin-build-web"]]
   }
 }
