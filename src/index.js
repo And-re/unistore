@@ -1,100 +1,157 @@
-import { assign } from './util';
+import { simpleEquals, select, mapActions } from './util.js';
 
-/**
- * Creates a new store, which is a tiny evented state container.
- * @name createStore
- * @param {Object} [state={}]		Optional initial state
- * @returns {store}
- * @example
- * let store = createStore();
- * store.subscribe( state => console.log(state) );
- * store.setState({ a: 'b' });   // logs { a: 'b' }
- * store.setState({ c: 'd' });   // logs { a: 'b', c: 'd' }
- */
-export default function createStore(state) {
-	let listeners = [];
-	state = state || {};
+export function createStore(state = {}) {
+  const listeners = new Map();
 
-	function unsubscribe(listener) {
-		let out = [];
-		for (let i=0; i<listeners.length; i++) {
-			if (listeners[i]===listener) {
-				listener = null;
-			}
-			else {
-				out.push(listeners[i]);
-			}
-		}
-		listeners = out;
-	}
+  function subscribe(setter, filter) {
+    listeners.set(setter, filter);
+  }
 
-	function setState(update, overwrite, action) {
-		state = overwrite ? update : assign(assign({}, state), update);
-		let currentListeners = listeners;
-		for (let i=0; i<currentListeners.length; i++) currentListeners[i](state, action);
-	}
+  function unsubscribe(setter) {
+    listeners.delete(setter);
+  }
 
-	/**
-	 * An observable state container, returned from {@link createStore}
-	 * @name store
-	 */
+  function getState() {
+    return state;
+  }
 
-	return /** @lends store */ {
+  function setState(newState, action) {
+    const lastState = state;
+    state = { ...state, ...newState };
+    listeners.forEach((filter, setter) => {
+      if (!simpleEquals(filter(state), lastState)) {
+        setter(filter(state), action);
+      }
+    });
+  }
 
-		/**
-		 * Create a bound copy of the given action function.
-		 * The bound returned function invokes action() and persists the result back to the store.
-		 * If the return value of `action` is a Promise, the resolved value will be used as state.
-		 * @param {Function} action	An action of the form `action(state, ...args) -> stateUpdate`
-		 * @returns {Function} boundAction()
-		 */
-		action(action) {
-			function apply(result) {
-				setState(result, false, action);
-			}
+  function bindAction(action) {
+    return function boundAction(...args) {
+      Promise.resolve(action(state, ...args)).then(setState);
+    };
+  }
 
-			// Note: perf tests verifying this implementation: https://esbench.com/bench/5a295e6299634800a0349500
-			return function() {
-				let args = [state];
-				for (let i=0; i<arguments.length; i++) args.push(arguments[i]);
-				let ret = action.apply(this, args);
-				if (ret!=null) {
-					if (ret.then) return ret.then(apply);
-					return apply(ret);
-				}
-			};
-		},
+  return { subscribe, unsubscribe, setState, getState, bindAction };
+}
 
-		/**
-		 * Apply a partial state object to the current state, invoking registered listeners.
-		 * @param {Object} update				An object with properties to be merged into state
-		 * @param {Boolean} [overwrite=false]	If `true`, update will replace state instead of being merged into it
-		 */
-		setState,
+export function createIntegration({
+  createContext,
+  useContext,
+  useMemo,
+  useEffect,
+  createElement,
+  memo,
+  Component,
+}) {
+  // Create context
+  const CONTEXT = createContext();
+  CONTEXT.displayName = 'Unistore';
 
-		/**
-		 * Register a listener function to be called whenever state is changed. Returns an `unsubscribe()` function.
-		 * @param {Function} listener	A function to call when state changes. Gets passed the new state.
-		 * @returns {Function} unsubscribe()
-		 */
-		subscribe(listener) {
-			listeners.push(listener);
-			return () => { unsubscribe(listener); };
-		},
+  function Provider(props) {
+    return createElement(CONTEXT.Provider, props);
+  }
 
-		/**
-		 * Remove a previously-registered listener function.
-		 * @param {Function} listener	The callback previously passed to `subscribe()` that should be removed.
-		 * @function
-		 */
-		unsubscribe,
+  function useStore(filterState, actions) {
+    filterState = useMemo(() => {
+      return typeof filterState != 'function'
+        ? select(filterState)
+        : filterState;
+    }, [filterState]);
 
-		/**
-		 * Retrieve the current state object.
-		 * @returns {Object} state
-		 */
-		getState() {
-			return state;
-		}
-	};
+    const store = useContext(CONTEXT);
+    const [filteredState, setState] = useState(() => store.getState());
+
+    const mappedActions = useMemo(() => {
+      mapActions(actions, store);
+    }, [actions, store]);
+
+    useEffect(() => {
+      store.subscribe(setState, filterState);
+      return () => store.unsubscribe(setState);
+    }, [store, setState, filterState]);
+
+    return [filteredState, mappedActions];
+  }
+
+  function connect(filterState, actions) {
+    if (typeof filter != 'function') {
+      filterState = select(filterState);
+    }
+    return function connectComponent(ChildComponent) {
+      const MemoizedComponent = memo(ChildComponent);
+      class ConnectedComponent extends Component {
+        constructor(props) {
+          super(props);
+
+          this.state = filterState(this.context.getState());
+          this.actions = mapActions(actions, this.store);
+
+          this.listener = this.listener.bind(this);
+        }
+
+        componentDidMount() {
+          this.context.subscribe(this.listener, filterState);
+        }
+
+        componentWillUnmount() {
+          this.context.unsubscribe(this.listener);
+        }
+
+        listener(filteredState) {
+          this.setState(filteredState);
+        }
+
+        render() {
+          return createElement(MemoizedComponent, {
+            ...this.state,
+            ...this.actions,
+            ...this.props,
+          });
+        }
+      }
+
+      ConnectedComponent.contextType = CONTEXT;
+
+      const childName =
+        ChildComponent.displayName || ChildComponent.name || 'Component';
+      ConnectedComponent.displayName = `Connect(${childName})`;
+
+      return ConnectedComponent;
+    };
+  }
+
+  return { useStore, Provider, connect };
+}
+
+export function connectDevtools(store) {
+  const extension =
+    window.__REDUX_DEVTOOLS_EXTENSION__ ||
+    window.top.__REDUX_DEVTOOLS_EXTENSION__;
+  if (!extension) {
+    console.warn('Please install/enable Redux devtools extension');
+    return;
+  }
+
+  let ignoreState = false;
+
+  const devtools = extension.connect();
+  devtools.init(store.getState());
+  devtools.subscribe(message => {
+    if (message.type === 'DISPATCH' && message.state) {
+      ignoreState =
+        message.payload.type === 'JUMP_TO_ACTION' ||
+        message.payload.type === 'JUMP_TO_STATE';
+      store.setState(JSON.parse(message.state));
+    }
+  });
+
+  function listener(state, { name = 'setState' }) {
+    if (!ignoreState) {
+      devtools.send(name, state);
+    } else {
+      ignoreState = false;
+    }
+  }
+  const filter = () => ({ __UNISTORE_DEVTOOLS__: true });
+  store.subscribe(listener, filter);
 }
