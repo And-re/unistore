@@ -20,7 +20,7 @@ export function createStore(state = {}) {
     state = { ...state, ...newState };
     listeners.forEach((filter, setter) => {
       if (!simpleEquals(filter(state), lastState)) {
-        setter(filter(state), action);
+        setter(state, action);
       }
     });
   }
@@ -66,7 +66,7 @@ export function createIntegration({
     );
 
     const store = useContext(CONTEXT);
-    const [filteredState, setState] = useState(() => store.getState());
+    const [state, setState] = useState(() => store.getState());
 
     const mappedActions = useMemo(() => {
       mapActions(actions, store);
@@ -77,7 +77,7 @@ export function createIntegration({
       return () => store.unsubscribe(setState);
     }, [store, setState, filterState]);
 
-    return [filteredState, mappedActions];
+    return [state, mappedActions];
   }
 
   function connect(filterState, actions) {
@@ -105,13 +105,13 @@ export function createIntegration({
           this.context.unsubscribe(this.listener);
         }
 
-        listener(filteredState) {
-          this.setState(filteredState);
+        listener(state) {
+          this.setState(state);
         }
 
         render() {
           return createElement(MemoizedComponent, {
-            ...this.state,
+            ...filterState(this.state),
             ...this.actions,
             ...this.props,
           });

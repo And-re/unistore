@@ -1,5 +1,7 @@
 extends:
   - healthier
   - plugin:prettier/recommended
+  - plugin:jest/recommended
+  - plugin:jest/style
 rules:
   eqeqeq: off
