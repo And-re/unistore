@@ -8,6 +8,11 @@
     "test": "jest",
     "version": "npx @pika/pack"
   },
+  "jest": {
+    "transform": {
+      "^.+\\.jsx?$": "babel-jest"
+    }
+  },
   "files": [
     "src/index.js",
     "src/util.js"
